@@ -21,6 +21,8 @@ installed version before expanding support.
   address storage and metadata.
 - [Chromium autofill table](https://chromium.googlesource.com/chromium/src/+/main/components/autofill/core/browser/webdata/autofill_table.cc):
   source autofill tables and timestamp units.
+- [Chromium FieldType](https://github.com/chromium/chromium/blob/main/components/autofill/core/browser/field_types.h):
+  address token identifiers, including third address line 83.
 - [Chromium cookie store](https://chromium.googlesource.com/chromium/src/+/main/net/extras/sqlite/sqlite_persistent_cookie_store.cc):
   schema-24 hostname binding and source cookie fields.
 - [Chromium macOS OSCrypt](https://chromium.googlesource.com/chromium/src/+/main/components/os_crypt/sync/os_crypt_mac.mm):

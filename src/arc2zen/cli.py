@@ -31,7 +31,8 @@ def parser():
         default=",".join(sorted(workflow.DEFAULT_PARTS)),
         help="Comma-separated: "
         + ",".join(sorted(workflow.PARTS))
-        + ". Cookies and keyboard are opt-in.",
+        + ". spaces includes pinned tabs/Essentials; tabs imports open web tabs. "
+        "Cookies and keyboard are opt-in.",
     )
     for name in ("apply", "restore"):
         command = commands.add_parser(
@@ -67,11 +68,17 @@ def main(argv=None):
                 )
                 profile = profiles[0]
             parts = {part.strip() for part in args.parts.split(",") if part.strip()}
+            run_path = (args.output or workflow.default_run()).expanduser().resolve()
+            print(
+                f"Private run directory (also retained on preparation failure): {run_path}",
+                file=sys.stderr,
+                flush=True,
+            )
             run, report = workflow.prepare(
                 args.arc_profile or Path(found["arc_profile"]),
                 args.arc_sidebar or Path(found["arc_sidebar"]),
                 profile,
-                args.output or workflow.default_run(),
+                run_path,
                 parts,
             )
             result = {

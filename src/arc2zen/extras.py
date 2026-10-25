@@ -112,6 +112,7 @@ def addresses(web, profile):
         81: "address-level3",
     }
     added, now = 0, int(time.time() * 1000)
+    unmapped_count, unmapped_types = 0, set()
     for arc_guid, used, used_at, modified in web.execute(
         "select guid,use_count,use_date,date_modified from addresses"
     ):
@@ -125,13 +126,18 @@ def addresses(web, profile):
             )
             if v
         }
+        # Chromium FieldType: ADDRESS_HOME_LINE3 is 83; 76 is a password type.
+        mapped_types = set(fields) | {3, 4, 5, 30, 31, 83}
+        unmapped = set(tokens) - mapped_types
+        unmapped_count += len(unmapped)
+        unmapped_types.update(unmapped)
         address = {field: tokens[t] for t, field in fields.items() if t in tokens}
         if not address.get("name"):
             name = " ".join(tokens[t] for t in (3, 4, 5) if t in tokens)
             if name:
                 address["name"] = name
         if not address.get("street-address"):
-            street = "\n".join(tokens[t] for t in (30, 31, 76) if t in tokens)
+            street = "\n".join(tokens[t] for t in (30, 31, 83) if t in tokens)
             if street:
                 address["street-address"] = street
         require(
@@ -154,7 +160,11 @@ def addresses(web, profile):
     path.write_text(json.dumps(data, ensure_ascii=False))
     set_pref(profile, "extensions.formautofill.addresses.supported", "on")
     set_pref(profile, "extensions.formautofill.addresses.enabled", True)
-    return {"addresses_added": added}
+    return {
+        "addresses_added": added,
+        "address_tokens_unmapped": unmapped_count,
+        "address_token_types_unmapped": sorted(unmapped_types),
+    }
 
 
 def forms(web, profile):

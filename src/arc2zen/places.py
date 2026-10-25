@@ -198,7 +198,7 @@ def convert(source_dir, profile, *, history=True, bookmarks=True):
                 "select id from moz_bookmarks where guid='unfiled_____'"
             ).fetchone()[0]
 
-            def bookmark(node, parent, position):
+            def bookmark(node, parent):
                 is_url = node.get("type") == "url"
                 if is_url and (not supported(node.get("url", ""))):
                     report["unsupported_bookmarks_skipped"] += 1
@@ -207,6 +207,10 @@ def convert(source_dir, profile, *, history=True, bookmarks=True):
                 if identity in bookmark_guids:
                     bid = bookmark_guids[identity]
                 else:
+                    position = c.execute(
+                        "select coalesce(max(position)+1,0) from moz_bookmarks where parent=?",
+                        (parent,),
+                    ).fetchone()[0]
                     pid = ensure_place(node["url"], node.get("name", "")) if is_url else None
                     try:
                         added = max(0, int(node.get("date_added", 0)) - EPOCH) or now
@@ -231,8 +235,8 @@ def convert(source_dir, profile, *, history=True, bookmarks=True):
                     report["bookmarks_added" if is_url else "bookmark_folders_added"] += 1
                     if pid:
                         imported_places.add(pid)
-                for index, child in enumerate(node.get("children", [])):
-                    bookmark(child, bid, index)
+                for child in node.get("children", []):
+                    bookmark(child, bid)
 
             root = {
                 "guid": "arc2zen-import-root",
@@ -244,11 +248,7 @@ def convert(source_dir, profile, *, history=True, bookmarks=True):
                     if isinstance(node, dict) and node.get("type") == "folder"
                 ],
             }
-            position = c.execute(
-                "select coalesce(max(position)+1,0) from moz_bookmarks where parent=?",
-                (unfiled,),
-            ).fetchone()[0]
-            bookmark(root, unfiled, position)
+            bookmark(root, unfiled)
         c.execute("create temp table arc_places(id integer primary key)")
         c.executemany("insert into arc_places values(?)", ((pid,) for pid in imported_places))
         c.execute(

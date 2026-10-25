@@ -50,6 +50,8 @@ arc2zen prepare --zen-profile "/path/from/discover" \
 
 Approve the macOS **Arc Safe Storage** prompt if cookies are selected.
 Use `--parts history,bookmarks` or another subset to limit the transfer.
+`spaces` includes pinned tabs and Essentials; `tabs` imports open web tabs into
+previously imported spaces or spaces included in the same run.
 
 ## Restore
 
@@ -59,7 +61,9 @@ Quit both browsers, then restore an applied run:
 arc2zen restore --run "/path/to/run"
 ```
 
-Restore stops if newer data would be overwritten. See [recovery details](docs/COMPATIBILITY.md#recovery).
+Restore stops if files changed after import. After reviewing the backup, use
+`--discard-new-data` to allow replacement; a rescue backup is created first.
+See [recovery details](docs/COMPATIBILITY.md#recovery) for interrupted runs.
 
 Migration runs stay local and contain private browser data. Keep them outside Git
 and never upload them or attach them to issues.

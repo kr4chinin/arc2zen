@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -88,26 +88,39 @@ def discover(home=None):
 
 def regular(path):
     require(not path.is_symlink(), "Symlinked browser files are unsupported")
+    hints = {
+        "formhistory.sqlite": "Use form autofill in Zen first, or omit forms with --parts.",
+        "search.json.mozlz4": "Use search in Zen first, or omit search with --parts.",
+    }
     require(
         path.is_file(),
-        f"Missing required file: {path.name}. Open and close the browser normally first.",
+        f"Missing required file: {path.name}. "
+        + hints.get(path.name, "Open and close the browser normally first."),
     )
 
 
 def snapshot_db(source, destination):
     regular(source)
-    source_db = sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)
-    target_db = sqlite3.connect(destination)
-    try:
-        source_db.backup(target_db)
-        require(
-            target_db.execute("pragma integrity_check").fetchone()[0] == "ok",
-            "SQLite snapshot failed integrity check",
-        )
-        target_db.execute("pragma wal_checkpoint(truncate)")
-    finally:
-        target_db.close()
-        source_db.close()
+    # Even mode=ro may create WAL/SHM beside the source. SQLite only opens our
+    # private copy; raw copies retain WAL/journal records without touching profiles.
+    with tempfile.TemporaryDirectory(prefix="arc2zen-snapshot-") as directory:
+        copied = Path(directory) / source.name
+        shutil.copyfile(source, copied)
+        for suffix in ("-wal", "-journal"):
+            sidecar = source.with_name(source.name + suffix)
+            if sidecar.exists() or sidecar.is_symlink():
+                regular(sidecar)
+                shutil.copyfile(sidecar, copied.with_name(copied.name + suffix))
+        with (
+            closing(sqlite3.connect(copied)) as source_db,
+            closing(sqlite3.connect(destination)) as target_db,
+        ):
+            source_db.backup(target_db)
+            require(
+                target_db.execute("pragma integrity_check").fetchone()[0] == "ok",
+                "SQLite snapshot failed integrity check",
+            )
+            target_db.execute("pragma wal_checkpoint(truncate)")
     os.chmod(destination, 0o600)
 
 
@@ -136,7 +149,8 @@ def private_location(run, *profiles):
 
 def prepare(arc, sidebar, profile, run, parts):
     ensure_closed()
-    require(parts and parts <= PARTS, "Select at least one supported migration part")
+    require(parts, "Select at least one migration part with --parts")
+    require(parts <= PARTS, "Unknown migration part; supported parts: " + ",".join(sorted(PARTS)))
     arc, sidebar, profile = (
         arc.expanduser().resolve(),
         sidebar.expanduser().resolve(),
@@ -295,16 +309,10 @@ def load_run(run, status):
 
 def backup_profile(profile, destination):
     # Retain the complete profile, including extensions/passwords, excluding only process locks.
-    def ignore(directory, names):
-        for name in names:
-            if name not in LOCKS:
-                require(
-                    not (Path(directory) / name).is_symlink(),
-                    "Cannot back up a profile containing symlinks",
-                )
+    def ignore(_directory, names):
         return LOCKS & set(names)
 
-    shutil.copytree(profile, destination, ignore=ignore)
+    shutil.copytree(profile, destination, ignore=ignore, symlinks=True)
     os.chmod(destination, 0o700)
 
 
@@ -313,14 +321,13 @@ def install_file(source, target):
     if target.name.endswith(".sqlite"):
         snapshot_db(source, target)
     else:
-        temporary = target.with_name(target.name + ".arc2zen-tmp")
-        require(
-            not temporary.exists() and not temporary.is_symlink(),
-            "A temporary install file already exists",
+        descriptor, name = tempfile.mkstemp(
+            prefix="." + target.name + ".arc2zen-", dir=target.parent
         )
+        os.close(descriptor)
+        temporary = Path(name)
         try:
-            shutil.copy2(source, temporary)
-            os.chmod(temporary, 0o600)
+            shutil.copyfile(source, temporary)
             os.replace(temporary, target)
         finally:
             temporary.unlink(missing_ok=True)
@@ -411,10 +418,16 @@ def restore(run, *, discard_new_data=False):
 
 def restore_locked(run, manifest, profile, *, discard_new_data):
     run, manifest, profile = load_run(run, {"applied", "applying", "restoring"})
+    require(
+        discard_new_data or manifest["status"] == "applied",
+        "This run was interrupted during apply/restore. Keep both browsers closed, review backup/, "
+        "then recover with restore --run <run> --discard-new-data.",
+    )
     current = fingerprint(profile, set(manifest["changes"]))
     require(
         discard_new_data or current == manifest.get("applied"),
-        "Zen changed after import. Restore would discard newer data; review the backup and use --discard-new-data explicitly.",
+        "Profile files differ from the recorded import state, possibly after another restore. "
+        "Restore would discard newer data; review the backup and use --discard-new-data explicitly.",
     )
     for name, item in manifest["changes"].items():
         if item["before"] is not None:

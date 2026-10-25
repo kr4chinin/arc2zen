@@ -116,26 +116,41 @@ def partition(row):
     if row["has_cross_site_ancestor"]:
         key += ",f"
     key += ")"
-    suffix = "^partitionKey=" + quote_plus(key.replace(":", "+"), safe="").replace("*", "%2A")
-    return (suffix, {"partitionKey": key})
+    attrs = {"partitionKey": key}
+    return origin_suffix(attrs), attrs
+
+
+def origin_suffix(attrs):
+    if isinstance(attrs, str):
+        require(not attrs or attrs.startswith("^"), "Unsupported session origin suffix")
+        return attrs
+    require(isinstance(attrs, dict), "Unsupported session origin attributes")
+    supported = {"userContextId", "privateBrowsingId", "firstPartyDomain", "partitionKey"}
+    require(
+        all(name in supported or not value for name, value in attrs.items()),
+        "Unsupported nonempty session origin attribute; no cookies were applied",
+    )
+    require(
+        not attrs.get("userContextId") and not attrs.get("privateBrowsingId"),
+        "Container/private cookie mapping is not supported",
+    )
+    # Match OriginAttributes::CreateSuffix ordering and string sanitization.
+    values = []
+    for name in ("firstPartyDomain", "partitionKey"):
+        value = attrs.get(name, "")
+        if value:
+            require(isinstance(value, str), "Unsupported session origin attribute type")
+            encoded = quote_plus(value.replace(":", "+"), safe="").replace("*", "%2A")
+            values.append(name + "=" + encoded)
+    return "^" + "&".join(values) if values else ""
 
 
 def cookie_key(cookie):
-    attrs = cookie.get("originAttributes", {})
-    if isinstance(attrs, str):
-        suffix = attrs
-    else:
-        require(
-            not attrs.get("userContextId") and (not attrs.get("privateBrowsingId")),
-            "Cookie schema, partition, or integrity validation failed",
-        )
-        pk = attrs.get("partitionKey", "")
-        suffix = "^partitionKey=" + quote_plus(pk.replace(":", "+"), safe="") if pk else ""
     return (
         cookie.get("name", ""),
         cookie.get("host", ""),
         cookie.get("path", ""),
-        suffix,
+        origin_suffix(cookie.get("originAttributes", {})),
     )
 
 

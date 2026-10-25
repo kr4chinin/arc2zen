@@ -25,6 +25,9 @@ input in the candidate; no target writes occur during preparation.
   Zen, close it normally, or omit that part. The tool does not invent an unknown schema.
 - Address JSON version 1; existing credit card records are retained without importing
   Chromium payment data. Unsupported address country formats stop preparation.
+  Unmapped nonempty address tokens are reported as a count and numeric type IDs,
+  without values. Only mapped fields and the documented name/street fallbacks are
+  transferred; retain the source snapshot for any additional address details.
 - GET search templates containing `{searchTerms}` only. Existing aliases win;
   POST engines and unsupported URLs are skipped.
 
@@ -47,6 +50,8 @@ Arc cookie database `meta.version = 24` → Mozilla `user_version = 17`.
   record wins. On identity collisions with Zen, imported Arc cookies replace Zen's.
 - Other existing Zen cookies are retained. Containers/private-context cookies that
   need an explicit mapping stop conversion.
+- Existing session cookies with `firstPartyDomain` retain their separate identity.
+  Unknown nonempty origin attributes stop preparation instead of being discarded.
 - The global cookie capacity becomes at least 5000 or the prepared total plus 1000.
   Firefox per-host limits and server-side session checks can still affect logins.
 
@@ -61,7 +66,8 @@ prefix bits and the 1500-byte URL hash limit. Dates and referrers are imported,
 visit counts exclude the same non-counting transition types as Places, and native
 frecency recalculation flags are set. Duplicate visits use URL + date + transition.
 
-Ordinary bookmark hierarchy is retained under a dedicated import root. Bookmark
+Ordinary bookmark hierarchy is retained under a dedicated import root. On repeat
+imports, new children append after existing Zen siblings rather than displacing them. Bookmark
 timestamps are converted from Chromium's 1601 microseconds. Form timestamps in the
 tested Arc `autofill` table are Unix **seconds**, converted to Mozilla microseconds;
 unsupported units/dates stop preparation. Existing form pairs merge usage maxima
@@ -71,12 +77,16 @@ and the earliest/latest timestamps. Address metadata uses Unix milliseconds.
 
 Only `apply` and `restore` write live Zen files. Both require closed browsers and
 hold a per-profile process lock to exclude another cooperating migration writer.
-SQLite uses its backup API, including WAL content; JSON files use atomic replacement.
+Preparation first copies database/WAL files into private temporary storage and
+opens only those copies with SQLite, avoiding source-side WAL/SHM creation.
+Installation uses SQLite's backup API, including WAL content; JSON files use atomic replacement.
 The main database and WAL hashes are included in drift checks. Multi-file apply is
 not a filesystem transaction: exceptions trigger rollback, but a power failure or
 SIGKILL can interrupt it. Check `manifest.json` before reopening Zen.
 
 - `preparing`: incomplete candidate. Live profile was not written. Start a new run.
+  The CLI prints the private run path before preparation so it remains available
+  on failure; remove that incomplete run manually when no longer needed.
 - `prepared`: candidate ready. Reopening Zen requires preparing a new run.
 - `applying`: interrupted apply. Use `restore --run ... --discard-new-data`, or
   manually restore the complete `backup/` with Zen closed.
@@ -87,10 +97,18 @@ SIGKILL can interrupt it. Check `manifest.json` before reopening Zen.
 - `restored`: selected files were restored. Full backups remain available.
 
 A complete profile backup is made with all files except process lock files.
-Symlinked profile contents are refused. Restore changes only selected files and
+Unselected symlinks are preserved as links without following or copying their
+external targets; selected migration files cannot be symlinks. Restore changes only selected files and
 removes a newly created address file if it did not exist before the import. If
 post-import data exists, `--discard-new-data` is required and a fresh full rescue
 backup is made first. Nothing automatically deletes runs or original Arc data.
+
+Drift guards intentionally compare exact database/WAL bytes. Another run's restore
+may rewrite SQLite page counters without changing records, so nested or overlapping
+runs can require a new preparation or explicit `--discard-new-data` recovery after
+reviewing backups. The guard is conservative rather than ignoring file changes.
+Interrupted JSON installations use unique temporary names; an orphan left by a
+hard kill does not block a later run.
 
 Manual full-profile recovery with both browsers closed follows Mozilla's
 [profile backup/restore instructions](https://support.mozilla.org/en-US/kb/back-and-restore-information-firefox-profiles).
