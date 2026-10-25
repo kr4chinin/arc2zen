@@ -27,6 +27,7 @@ def require_candidate(profile):
 
 def digest(path):
     path = Path(path)
+    require(not path.is_symlink(), "Symlinked profile files are unsupported")
     if not path.exists():
         return None
     require(path.is_file() and not path.is_symlink(), "Expected a regular profile file")

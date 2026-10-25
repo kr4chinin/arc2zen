@@ -194,6 +194,15 @@ class ReviewRegressionTests(unittest.TestCase):
             len(json.loads((self.zen / "autofill-profiles.json").read_text())["addresses"]), 1
         )
 
+    def test_dangling_symlink_for_selected_optional_file_is_rejected_during_prepare(self):
+        link = self.zen / "autofill-profiles.json"
+        target = self.root / "missing-addresses.json"
+        link.symlink_to(target)
+        with self.assertRaises(MigrationError):
+            self.prepare({"addresses"})
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), str(target))
+
     def test_interrupted_run_has_an_explicit_recovery_message(self):
         for state in ("applying", "restoring"):
             with self.subTest(state=state):
