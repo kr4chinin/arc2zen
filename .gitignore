@@ -1,0 +1,44 @@
+.venv/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.DS_Store
+.artifacts/
+# Browser data must never be committed, including private repositories.
+*.sqlite*
+*.db*
+*.jsonlz4
+*.mozlz4
+*.csv
+*.log
+*.xpi
+*.har
+Cookies
+Cookies-*
+History
+History-*
+Web Data
+Web Data-*
+Bookmarks
+Bookmarks.bak
+Local State
+Preferences
+prefs.js
+user.js
+logins.json
+key4.db
+autofill-profiles.json
+StorableSidebar.json
+Sidebar.json
+zen-keyboard-shortcuts.json
+manifest.json
+report.json
+verification.json
+backups/
+runs/
+candidate/
+snapshot/
+source-data/
