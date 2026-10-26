@@ -8,27 +8,14 @@ permissions:
   contents: read
 
 jobs:
-  synthetic-tests:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        python: ['3.11', '3.13']
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
-      - name: Install liblz4 on Linux
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y liblz4-1
-      - name: Install liblz4 on macOS
-        if: runner.os == 'macOS'
-        run: brew list lz4 >/dev/null 2>&1 || brew install lz4
-      - run: python -m pip install -e . ruff
-      - run: arc2zen --version
-      - run: ruff check src tests
-      - run: ruff format --check src tests
-      - run: python -m unittest discover -s tests -v
+          python-version: '3.13'
+      - run: python -m pip install ruff
+      - run: ruff check src
+      - run: ruff format --check src

@@ -8,8 +8,8 @@ space-metadata approach informed the current adapter. The original MIT notice is
 preserved in [LICENSE](LICENSE).
 
 The modern session adapter, Essentials correction, cookie converter, Places and
-autofill imports, staged command-line workflow, rollback handling, documentation
-and synthetic tests were assembled for this continuation. No endorsement or
+autofill imports, staged command-line workflow, rollback handling and documentation
+were assembled for this continuation. No endorsement or
 affiliation with the original maintainers, Arc, Zen, Mozilla or extension vendors
 is implied. This is a new repository, not a GitHub fork relationship; the upstream
 repository remains available at the link above.

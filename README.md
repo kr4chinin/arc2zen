@@ -40,8 +40,8 @@ flowchart TD
 - Arc's **Default** profile, flat pinned tabs and Zen workspaces without containers.
   Bookmark folders are supported; pinned sidebar folders are not.
 
-Early release: original adapters were tested with Arc 1.170.0 and Zen 1.23.4b on
-one Mac. The packaged CLI has synthetic tests; other versions are not certified.
+Early release: the original migration used Arc 1.170.0 and Zen 1.23.4b on one Mac.
+Other versions are not certified.
 
 ## Install
 

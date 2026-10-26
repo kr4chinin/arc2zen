@@ -6,9 +6,9 @@ macOS only for live migration. Python 3.11+ and liblz4 are required. CommonCrypt
 and the macOS `security` command are used only when cookies are selected.
 
 The predecessor scripts were used with Arc 1.170.0, Zen 1.23.4b and Mozilla cookie
-schema 17. The new staged CLI uses those adapters with synthetic integration
-coverage. Other versions are not certified. Compatibility checks stop unsupported
-input in the candidate; no target writes occur during preparation.
+schema 17. The staged CLI uses those adapters. Other versions are not certified.
+Compatibility checks stop unsupported input in the candidate; no target writes
+occur during preparation.
 
 - Arc `User Data/Default`; multiple/custom Arc profiles are rejected.
 - One local sidebar container with alternating key/value arrays.
@@ -39,7 +39,7 @@ Arc cookie database `meta.version = 24` → Mozilla `user_version = 17`.
 - `v10` AES-CBC; PBKDF2-HMAC-SHA1 (`saltysalt`, 1003 iterations, 16-byte key).
 - Validate the SHA256 hostname prefix after decryption before accepting the value.
 - Chromium timestamps are microseconds since 1601. Mozilla persistent expiry in
-  this tested schema is Unix **milliseconds**; access/creation/update use Unix
+  this supported schema is Unix **milliseconds**; access/creation/update use Unix
   microseconds. Do not reuse this conversion for older Firefox expiry schemas.
   Missing or pre-Unix-epoch creation/access/update metadata stops preparation
   instead of creating negative native timestamps.
@@ -72,7 +72,7 @@ frecency recalculation flags are set. Duplicate visits use URL + date + transiti
 Ordinary bookmark hierarchy is retained under a dedicated import root. On repeat
 imports, new children append after existing Zen siblings rather than displacing them. Bookmark
 timestamps are converted from Chromium's 1601 microseconds. Form timestamps in the
-tested Arc `autofill` table are Unix **seconds**, converted to Mozilla microseconds;
+inspected Arc `autofill` table are Unix **seconds**, converted to Mozilla microseconds;
 unsupported units/dates stop preparation. Existing form pairs merge usage maxima
 and the earliest/latest timestamps. Address metadata uses Unix milliseconds.
 

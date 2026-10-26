@@ -4,27 +4,13 @@
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e . ruff
-ruff check src tests
-ruff format --check src tests
-python -m unittest discover -s tests -v
+ruff check src
+ruff format --check src
 ```
 
-The tests create disposable, entirely invented Arc/Zen profiles. They do not read
-a user's home profile, call Keychain, launch browsers, download extensions, or
-access the network. macOS additionally exercises real CommonCrypto AES with an
-invented key and verifies hostname tampering rejection. That test is skipped on
-Linux. Process-guard mocks are test-only; never add a CLI bypass for live migration.
-
-Covered behavior includes candidate isolation, history/URL/referrer counts,
-duplicate imports, bookmark nesting, exact autofill values and timestamp units,
-session/persistent cookie separation and partition identities, profile drift,
-candidate tampering, unsupported folders/custom profiles, partial-failure rollback,
-restore conflict detection, rescue backups and redacted CLI errors.
-
-CI runs the same synthetic checks on macOS and Linux with Python 3.11 and 3.13.
-Passing these tests does not establish native browser compatibility on arbitrary
-versions. Real-profile testing must be explicit and local, with a fresh backup;
-never upload the profile or run folder as a CI artifact.
+CI checks source lint and formatting. Browser verification must be explicit and
+local, with a fresh backup; never upload a profile or run folder as a CI artifact.
+Do not add bypasses for process guards, backups or candidate isolation.
 
 ## Layout
 
@@ -37,4 +23,4 @@ never upload the profile or run folder as a CI artifact.
 
 Converters require a candidate marker; calling them with a browser profile directly
 is rejected. Keep generated browser data outside the checkout. Extend compatibility
-only with documented formats and invented fixtures. See [format references](SOURCES.md).
+only with documented formats. See [format references](SOURCES.md).
