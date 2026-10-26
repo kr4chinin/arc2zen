@@ -70,6 +70,10 @@ def make_tab(tab_id, title, url, workspace, essential=False):
 
 def root_items(space, kind, items):
     roots = pairs(space["containerIDs"])
+    require(
+        kind in roots and roots[kind] in items,
+        f"Arc {kind} container is missing; unsupported sidebar layout",
+    )
     root = items[roots[kind]]
     return root.get("childrenIds", [])
 
@@ -102,13 +106,22 @@ def convert(source, profile, *, spaces=True, tabs=True):
         "essentials_added": 0,
         "open_tabs_added": 0,
         "unsupported_open_tabs_skipped": 0,
+        "unsupported_pinned_tabs_skipped": 0,
+        "unsupported_essentials_skipped": 0,
     }
     mapping, portable, open_tabs = {}, [], []
 
     def add(tab_id, workspace, *, essential=False, pinned=True):
         title, url = tab_info(items[tab_id])
-        if not pinned and not url.startswith(("https://", "http://")):
-            report["unsupported_open_tabs_skipped"] += 1
+        if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+            counter = (
+                "unsupported_essentials_skipped"
+                if essential
+                else (
+                    "unsupported_pinned_tabs_skipped" if pinned else "unsupported_open_tabs_skipped"
+                )
+            )
+            report[counter] += 1
             return
         portable.append((title, url))
         identity = stable_id("tab", tab_id)

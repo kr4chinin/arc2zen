@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 
 
@@ -36,8 +37,18 @@ def digest(path):
 
 
 def write_json(path, value):
-    Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
-    os.chmod(path, 0o600)
+    path = Path(path)
+    descriptor, name = tempfile.mkstemp(prefix="." + path.name + "-", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def set_pref(profile, name, value):

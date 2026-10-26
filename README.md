@@ -7,6 +7,32 @@ Arc-like keyboard preset are optional.
 The tool prepares a local copy first, then applies it with a complete Zen backup.
 [Passwords and extensions](docs/PASSWORDS-AND-EXTENSIONS.md) are handled separately.
 
+## How it works
+
+```mermaid
+flowchart TD
+    arc[(Arc)] --> prepare
+    zen[(Current Zen)] --> prepare
+    subgraph staging["Local preparation · no live writes"]
+        prepare("prepare · candidate + report") --> review{"Hashes match?"}
+    end
+    review -->|"unchanged"| backup[(Full Zen backup)]
+    review -.->|"changed: prepare again"| prepare
+    backup --> apply("apply · update selected Zen files")
+    apply -.->|"if needed"| restore("restore · rescue backup first")
+    backup -.-> restore
+
+    classDef input fill:#f1f5f9,stroke:#64748b,color:#0f172a
+    classDef stage fill:#ede9fe,stroke:#8b5cf6,color:#3b0764
+    classDef safe fill:#ecfdf5,stroke:#10b981,color:#064e3b
+    classDef recovery fill:#fff7ed,stroke:#f59e0b,color:#78350f
+    class arc,zen input
+    class prepare,review stage
+    class backup,apply safe
+    class restore recovery
+    style staging fill:#f8fafc,stroke:#cbd5e1,color:#475569
+```
+
 ## Requirements
 
 - macOS, Python 3.11+ and liblz4.
@@ -52,6 +78,8 @@ Approve the macOS **Arc Safe Storage** prompt if cookies are selected.
 Use `--parts history,bookmarks` or another subset to limit the transfer.
 `spaces` includes pinned tabs and Essentials; `tabs` imports open web tabs into
 previously imported spaces or spaces included in the same run.
+The keyboard preset maps Cmd+D to pin, Cmd+S to sidebar and Cmd+Option+Return to
+duplicate, disabling conflicting bindings.
 
 ## Restore
 

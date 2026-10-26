@@ -12,8 +12,9 @@ input in the candidate; no target writes occur during preparation.
 
 - Arc `User Data/Default`; multiple/custom Arc profiles are rejected.
 - One local sidebar container with alternating key/value arrays.
-- Flat pinned tabs; pinned folders fail. Open tabs accept HTTP(S) and skip browser
-  internal URLs. Existing Zen tabs, folders, groups and split-view data are retained.
+- Flat pinned tabs; pinned folders fail. All tab imports accept HTTP(S), with
+  unsupported pinned, essential and open-tab URLs counted and skipped. Existing
+  Zen tabs, folders, groups and split-view data are retained.
 - Current `zen-sessions.jsonlz4` structure: spaces, tabs, folders, groups, splitViewData.
 - Stable identifiers deduplicate repeated imports. Existing imported records are
   generally retained on rerun; this is a one-time importer, not ongoing sync.
@@ -40,6 +41,8 @@ Arc cookie database `meta.version = 24` → Mozilla `user_version = 17`.
 - Chromium timestamps are microseconds since 1601. Mozilla persistent expiry in
   this tested schema is Unix **milliseconds**; access/creation/update use Unix
   microseconds. Do not reuse this conversion for older Firefox expiry schemas.
+  Missing or pre-Unix-epoch creation/access/update metadata stops preparation
+  instead of creating negative native timestamps.
 - Chromium SameSite -1/0/1/2 → Mozilla 256/0/1/2.
 - Partition `top_frame_site_key` → Mozilla `originAttributes.partitionKey`, retaining
   the cross-site ancestor marker. Never flatten partitioned cookies.
@@ -75,12 +78,15 @@ and the earliest/latest timestamps. Address metadata uses Unix milliseconds.
 
 ## Recovery
 
-Only `apply` and `restore` write live Zen files. Both require closed browsers and
-hold a per-profile process lock to exclude another cooperating migration writer.
+Only `apply` and `restore` write live Zen files. Prepare, apply and restore all
+require closed browsers and hold a per-profile process lock, so a preparation
+cannot snapshot another migration's temporary installation state.
 Preparation first copies database/WAL files into private temporary storage and
 opens only those copies with SQLite, avoiding source-side WAL/SHM creation.
 Installation uses SQLite's backup API, including WAL content; JSON files use atomic replacement.
-The main database and WAL hashes are included in drift checks. Multi-file apply is
+The main database and WAL hashes are included in drift checks. Run metadata is
+written to a private temporary file, flushed, then atomically replaced so an
+interrupted write retains the previous readable state. Multi-file apply is
 not a filesystem transaction: exceptions trigger rollback, but a power failure or
 SIGKILL can interrupt it. Check `manifest.json` before reopening Zen.
 
@@ -88,6 +94,10 @@ SIGKILL can interrupt it. Check `manifest.json` before reopening Zen.
   The CLI prints the private run path before preparation so it remains available
   on failure; remove that incomplete run manually when no longer needed.
 - `prepared`: candidate ready. Reopening Zen requires preparing a new run.
+  A backup interrupted before installation can be retried with the same apply
+  command. Copies under `backup-in-progress-*` are incomplete; `backup/` is
+  published only after copying and drift checks finish. An unused `backup/` from
+  an earlier attempt is preserved under `backup-unused-*` before retrying.
 - `applying`: interrupted apply. Use `restore --run ... --discard-new-data`, or
   manually restore the complete `backup/` with Zen closed.
 - `applied`: import finished. Verify it in Zen and retain `backup/`.
@@ -97,6 +107,7 @@ SIGKILL can interrupt it. Check `manifest.json` before reopening Zen.
 - `restored`: selected files were restored. Full backups remain available.
 
 A complete profile backup is made with all files except process lock files.
+Only top-level process locks are excluded; nested application data is retained.
 Unselected symlinks are preserved as links without following or copying their
 external targets; selected migration files cannot be symlinks. Restore changes only selected files and
 removes a newly created address file if it did not exist before the import. If

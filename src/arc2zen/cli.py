@@ -61,16 +61,16 @@ def main(argv=None):
             found = workflow.discover()
             profile = args.zen_profile
             if profile is None:
-                profiles = [Path(p["path"]) for p in found["zen_profiles"] if p["exists"]]
+                profiles = found["zen_profiles"]
                 require(
-                    len(profiles) == 1,
+                    len(profiles) == 1 and profiles[0]["exists"],
                     "Several or no Zen profiles found. Run discover and pass --zen-profile explicitly.",
                 )
-                profile = profiles[0]
+                profile = Path(profiles[0]["path"])
             parts = {part.strip() for part in args.parts.split(",") if part.strip()}
             run_path = (args.output or workflow.default_run()).expanduser().resolve()
             print(
-                f"Private run directory (also retained on preparation failure): {run_path}",
+                f"Private run directory: {run_path}",
                 file=sys.stderr,
                 flush=True,
             )

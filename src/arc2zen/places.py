@@ -203,7 +203,11 @@ def convert(source_dir, profile, *, history=True, bookmarks=True):
                 if is_url and (not supported(node.get("url", ""))):
                     report["unsupported_bookmarks_skipped"] += 1
                     return
-                identity = guid("arc2zen-bookmark:" + str(node["guid"]))
+                require(
+                    isinstance(node.get("guid"), str) and node["guid"],
+                    "Arc bookmark lacks a stable GUID; unsupported bookmark layout",
+                )
+                identity = guid("arc2zen-bookmark:" + node["guid"])
                 if identity in bookmark_guids:
                     bid = bookmark_guids[identity]
                 else:
@@ -215,7 +219,7 @@ def convert(source_dir, profile, *, history=True, bookmarks=True):
                     try:
                         added = max(0, int(node.get("date_added", 0)) - EPOCH) or now
                         modified = max(0, int(node.get("date_modified", 0)) - EPOCH) or added
-                    except ValueError:
+                    except (TypeError, ValueError):
                         added = modified = now
                     cur = c.execute(
                         "insert into moz_bookmarks(type,fk,parent,position,title,dateAdded,lastModified,guid,syncStatus,syncChangeCounter)\n                    values(?,?,?,?,?,?,?,?,1,1)",

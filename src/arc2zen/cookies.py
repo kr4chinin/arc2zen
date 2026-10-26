@@ -205,6 +205,13 @@ def convert(source, target):
             ):
                 report["unsupported_extension_partition_skipped"] += 1
                 continue
+            require(
+                all(
+                    isinstance(row[field], int) and row[field] >= EPOCH_US
+                    for field in ("creation_utc", "last_access_utc", "last_update_utc")
+                ),
+                "Unsupported cookie timestamp metadata; no cookies were applied",
+            )
             value = decrypt(row, key)
             report["decrypted_and_host_verified"] += 1
             suffix, attrs = partition(row)

@@ -15,7 +15,7 @@ from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .common import digest, require, write_json
+from .common import MigrationError, digest, require, write_json
 
 PARTS = {
     "spaces",
@@ -66,6 +66,16 @@ def discover(home=None):
     root = support / "zen"
     config = configparser.ConfigParser(interpolation=None)
     config.read(root / "profiles.ini")
+    installs = configparser.ConfigParser(interpolation=None)
+    installs.read(root / "installs.ini")
+    install_defaults = set()
+    for table in (config, installs):
+        for section in table.sections():
+            if not section.startswith("Profile") and table.has_option(section, "Default"):
+                default = Path(table.get(section, "Default"))
+                install_defaults.add(
+                    str((default if default.is_absolute() else root / default).resolve())
+                )
     profiles = []
     for section in config.sections():
         if section.startswith("Profile") and config.has_option(section, "Path"):
@@ -77,6 +87,9 @@ def discover(home=None):
                     "name": config.get(section, "Name", fallback=section),
                     "path": str(path.resolve()),
                     "exists": path.is_dir(),
+                    "default": str(path.resolve()) in install_defaults
+                    if install_defaults
+                    else config.get(section, "Default", fallback="0") == "1",
                 }
             )
     return {
@@ -149,6 +162,12 @@ def private_location(run, *profiles):
 
 def prepare(arc, sidebar, profile, run, parts):
     ensure_closed()
+    profile = profile.expanduser().resolve()
+    with profile_lock(profile):
+        return prepare_locked(arc, sidebar, profile, run, parts)
+
+
+def prepare_locked(arc, sidebar, profile, run, parts):
     require(parts, "Select at least one migration part with --parts")
     require(parts <= PARTS, "Unknown migration part; supported parts: " + ",".join(sorted(PARTS)))
     arc, sidebar, profile = (
@@ -283,11 +302,31 @@ def prepare(arc, sidebar, profile, run, parts):
 
 def load_run(run, status):
     run = run.expanduser().resolve()
-    manifest = json.loads((run / "manifest.json").read_text())
+    try:
+        manifest = json.loads((run / "manifest.json").read_text())
+    except (OSError, ValueError, UnicodeError):
+        raise MigrationError(
+            "Cannot read the run manifest: missing, incomplete or corrupt. Keep browsers closed; "
+            "if backup/ exists, preserve it for manual recovery (docs/COMPATIBILITY.md#recovery)."
+        ) from None
     require(
-        manifest.get("format") == 1 and manifest.get("status") in status,
-        "Run is not in the required state",
+        isinstance(manifest, dict) and manifest.get("format") == 1,
+        "Unsupported run manifest format; keep any backup for manual recovery",
     )
+    actual = manifest.get("status")
+    if actual not in status:
+        hints = {
+            "preparing": "Preparation is incomplete; the live profile was not changed. Prepare a new run.",
+            "prepared": "The run is prepared. Use apply to import it; nothing has been installed yet.",
+            "applying": "The run was interrupted. Keep browsers closed; use restore --run <run> --discard-new-data.",
+            "restoring": "Restore was interrupted. Keep browsers closed; retry restore --run <run> --discard-new-data.",
+            "applied": "The run is already applied. Use restore to recover its backup, or prepare a new run.",
+            "restored": "The run is already restored. Prepare a new run to import again.",
+            "rolled_back": "The failed installation was rolled back. Preserve its backup and prepare a new run.",
+        }
+        raise MigrationError(
+            hints.get(actual, "Unknown run state; preserve any backup for manual recovery")
+        )
     require(
         manifest.get("changes") and set(manifest["changes"]) <= ALLOWED_FILES,
         "Unsupported manifest file list",
@@ -309,8 +348,8 @@ def load_run(run, status):
 
 def backup_profile(profile, destination):
     # Retain the complete profile, including extensions/passwords, excluding only process locks.
-    def ignore(_directory, names):
-        return LOCKS & set(names)
+    def ignore(directory, names):
+        return LOCKS & set(names) if Path(directory) == profile else set()
 
     shutil.copytree(profile, destination, ignore=ignore, symlinks=True)
     os.chmod(destination, 0o700)
@@ -365,8 +404,15 @@ def apply_locked(run, manifest, profile):
             "Candidate changed since prepare",
         )
     backup = run / "backup"
-    require(not backup.exists(), "Backup already exists; this run cannot be applied again")
-    backup_profile(profile, backup)
+    if backup.exists() or backup.is_symlink():
+        require(
+            backup.is_dir() and not backup.is_symlink(),
+            "Unexpected backup path; preserve the run for manual inspection",
+        )
+        # A prepared run has not installed files. Preserve any old unused copy.
+        os.replace(backup, run / ("backup-unused-" + uuid.uuid4().hex[:8]))
+    pending_backup = run / ("backup-in-progress-" + uuid.uuid4().hex[:8])
+    backup_profile(profile, pending_backup)
     ensure_closed()
     require(
         fingerprint(
@@ -376,6 +422,7 @@ def apply_locked(run, manifest, profile):
         == manifest["baseline"],
         "Profile changed during backup; live profile was not modified",
     )
+    os.replace(pending_backup, backup)
     manifest["status"] = "applying"
     write_json(run / "manifest.json", manifest)
     try:
@@ -482,7 +529,7 @@ def profile_lock(profile):
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            require(False, "Another Arc to Zen apply/restore is using this profile")
+            require(False, "Another Arc to Zen operation is using this profile")
         yield
     finally:
         os.close(descriptor)
