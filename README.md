@@ -1,4 +1,4 @@
-![Arc to Zen](docs/assets/arc2zen.png)
+<img src="docs/assets/arc2zen.png" alt="Arc to Zen" width="432">
 
 # Arc → Zen
 
