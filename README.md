@@ -1,3 +1,5 @@
+![Arc to Zen](docs/assets/arc2zen.png)
+
 # Arc → Zen
 
 Move your Arc data to Zen on macOS: spaces, pinned tabs, Essentials, open tabs,
